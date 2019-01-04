@@ -14,12 +14,13 @@ import pandas
 import numpy as np
 import logging
 import re
+from datetime import datetime as dt
 
 def getAcc(sec_acc):
     
     template = "https://www.ebi.ac.uk/ena/data/view/{0}&display=xml"
     
-    res = requests.get(template.format(sec_acc), verify=False).content
+    res = requests.get(template.format(sec_acc)).content
     
     root = xml.fromstring(res)
 
@@ -46,23 +47,29 @@ def downloadSample(downloader_path, output_path, accs, log_queue):
         '''
         return os.path.join(output_path, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
     
-    for acc in accs:
-        sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
+    #configure a logger
+    logger = logging.getLogger()
+    qh = logging.handlers.QueueHandler(log_queue)
+    logger.addHandler(qh)
+    logger.setLevel(logging.INFO)
+        
+#     for acc in accs:
+#         sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
+#     
+#     #merge and move files
+#     if len(accs) > 1:
+#         sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 1) for acc in accs]), getPath(accs[0], 1)))
+#         sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 2) for acc in accs]), getPath(accs[0], 2)))
+#         for acc in accs[1:]:
+#             os.remove(getPath(acc, 1))
+#             os.remove(getPath(acc, 2))
+#             os.rmdir(os.path.join(output_path, acc, acc))
+#     
+#     os.rename(getPath(accs[0], 1), getFinalPath(accs[0], 1))
+#     os.rename(getPath(accs[0], 2), getFinalPath(accs[0], 2))
+#     os.rmdir(os.path.join(output_path, accs[0], accs[0]))
     
-    #merge and move files
-    if len(accs) > 1:
-        sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 1) for acc in accs]), getPath(accs[0], 1)))
-        sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 2) for acc in accs]), getPath(accs[0], 2)))
-        for acc in accs[1:]:
-            os.remove(getPath(acc, 1))
-            os.remove(getPath(acc, 2))
-            os.rmdir(os.path.join(output_path, acc, acc))
-    
-    os.rename(getPath(accs[0], 1), getFinalPath(accs[0], 1))
-    os.rename(getPath(accs[0], 2), getFinalPath(accs[0], 2))
-    os.rmdir(os.path.join(output_path, accs[0], accs[0]))
-    
-    log_queue.put(acc) #TODO
+    logger.info(accs[0]) #TODO
 
 def downloadSampleStar(params):
     return downloadSample(*params)
@@ -88,9 +95,9 @@ def loadTable(input_path):
     
     return df
 
-def getLogger(name, path):
+def getLogger(path):
     
-    logger = logging.getLogger(name)
+    logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     
     fh = logging.FileHandler(path)
@@ -105,21 +112,25 @@ def getLogger(name, path):
     
     return logger
 
-def logListener(queue, logger):
-    
+def logListener(queue, log_path):
+    print('starting log listener')
+    logger = getLogger(log_path)
     while True:
         try:
             record = queue.get()
             if record is None:
                 break
-            logger.info(record)
+            print('logging ' + record)
+            logger.handle(record)
         except Exception:
             import sys, traceback
             print('Whoops! Problem:', file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
+    
+    print('exiting log listener')
 
 def logListenerStar(params):
-    
+    print('Im log listener star')
     logListener(*params)
 
 def run(downloader_path, input_path, output_path):
@@ -127,8 +138,7 @@ def run(downloader_path, input_path, output_path):
     log_path = os.path.join(output_path, 'log.txt')
     acc_path = os.path.join(output_path, 'accs.pkl')
     
-    logger = getLogger('log', log_path)
-    log_queue = mp.Manager().Queue()
+    log_queue = mp.Manager().Queue(-1)
     
     if not os.path.isfile(acc_path):
         acc_df = loadTable(input_path)['accs']
@@ -144,22 +154,29 @@ def run(downloader_path, input_path, output_path):
 
     accs = acc_df.iloc[msk]
     
-    pool = mp.Pool(mp.cpu_count())
-    
-    pool.apply_async(logListenerStar, (log_queue, logger))
+    pool = mp.Pool()
+
+    listener = mp.Process(target=logListener, args=(log_queue,log_path))
+    listener.start()
     
     pool.map(downloadSampleStar, [(downloader_path, output_path, x, log_queue) for x in accs])
     
-    log_queue.put(None)
+    log_queue.put_nowait(None)
+    pool.close()
+    pool.join()
+    listener.join()
+    
     
     
     
 if __name__ == '__main__':
     
     downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
-    downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
+    input_path = '/d/data/plasmo/additional_data/test_accs.txt'
+    output_path = '/d/data/plasmo/additional_data'
+#     downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
+#     input_path = sys.argv[1]
+#     output_path = sys.argv[2]
     
     run(downloader_path, input_path, output_path)
     print('ENADownloader Complete.')
