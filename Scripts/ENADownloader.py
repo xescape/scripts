@@ -19,7 +19,7 @@ def getAcc(sec_acc):
     
     template = "https://www.ebi.ac.uk/ena/data/view/{0}&display=xml"
     
-    res = requests.get(template.format(sec_acc)).content
+    res = requests.get(template.format(sec_acc), verify=False).content
     
     root = xml.fromstring(res)
 
