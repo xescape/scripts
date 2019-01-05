@@ -18,6 +18,7 @@ from datetime import datetime as dt
 
 def getAcc(sec_acc):
     
+    print('getting acc for ' + sec_acc)
     template = "https://www.ebi.ac.uk/ena/data/view/{0}&display=xml"
     
     res = requests.get(template.format(sec_acc)).content
