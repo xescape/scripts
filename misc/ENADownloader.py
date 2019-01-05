@@ -29,7 +29,7 @@ def getAcc(sec_acc):
             return child.find('XREF_LINK').find('ID').text.split(',')
 
             
-def downloadSample(downloader_path, output_path, accs, log_queue):
+def downloadSample(downloader_path, output_path, accs):
     '''
     process one sample, combining the various fastqs if necessary
     '''
@@ -47,11 +47,6 @@ def downloadSample(downloader_path, output_path, accs, log_queue):
         '''
         return os.path.join(output_path, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
     
-    #configure a logger
-    logger = logging.getLogger()
-    qh = logging.handlers.QueueHandler(log_queue)
-    logger.addHandler(qh)
-    logger.setLevel(logging.INFO)
         
 #     for acc in accs:
 #         sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
@@ -69,7 +64,7 @@ def downloadSample(downloader_path, output_path, accs, log_queue):
 #     os.rename(getPath(accs[0], 2), getFinalPath(accs[0], 2))
 #     os.rmdir(os.path.join(output_path, accs[0], accs[0]))
     
-    logger.info(accs[0]) #TODO
+    logging.info(accs[0]) #TODO
 
 def downloadSampleStar(params):
     return downloadSample(*params)
@@ -79,6 +74,7 @@ def checkForCompletion(log, acc):
     checks if this acc is in the log. Return true if not there.
     '''
     if re.search(acc, log):
+        print(acc + ' already done!')
         return False
     return True
 
@@ -95,7 +91,7 @@ def loadTable(input_path):
     
     return df
 
-def getLogger(path):
+def configLogger(path):
     
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
@@ -109,36 +105,35 @@ def getLogger(path):
     sh = logging.StreamHandler()
     sh.setLevel(logging.INFO)
     logger.addHandler(sh)
-    
-    return logger
 
-def logListener(queue, log_path):
-    print('starting log listener')
-    logger = getLogger(log_path)
-    while True:
-        try:
-            record = queue.get()
-            if record is None:
-                break
-            print('logging ' + record)
-            logger.handle(record)
-        except Exception:
-            import sys, traceback
-            print('Whoops! Problem:', file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
-    
-    print('exiting log listener')
 
-def logListenerStar(params):
-    print('Im log listener star')
-    logListener(*params)
+# def logListener(queue, log_path):
+#     print('starting log listener')
+#     logger = getLogger(log_path)
+#     while True:
+#         try:
+#             record = queue.get()
+#             if record is None:
+#                 break
+#             print('logging ' + record)
+#             logger.handle(record)
+#         except Exception:
+#             import sys, traceback
+#             print('Whoops! Problem:', file=sys.stderr)
+#             traceback.print_exc(file=sys.stderr)
+#     
+#     print('exiting log listener')
+# 
+# def logListenerStar(params):
+#     print('Im log listener star')
+#     logListener(*params)
 
 def run(downloader_path, input_path, output_path):
     
     log_path = os.path.join(output_path, 'log.txt')
     acc_path = os.path.join(output_path, 'accs.pkl')
     
-    log_queue = mp.Manager().Queue(-1)
+    configLogger(log_path)
     
     if not os.path.isfile(acc_path):
         acc_df = loadTable(input_path)['accs']
@@ -147,33 +142,31 @@ def run(downloader_path, input_path, output_path):
         acc_df = pandas.read_pickle(acc_path)
     
     #get accs of the ones we need to run.
+    if os.path.isfile(log_path):
+        with open(log_path, 'r') as f:
+            log = f.read()
+        msk = list(acc_df.apply(lambda x: checkForCompletion(log, x[0])))
+        accs = acc_df.iloc[msk]
+    else:
+        accs = acc_df
     
-    with open(log_path, 'r') as f:
-        log = f.read()
-    msk = list(acc_df.apply(lambda x: checkForCompletion(log, x[0][0])))
-
-    accs = acc_df.iloc[msk]
-    
-    pool = mp.Pool()
-
-    listener = mp.Process(target=logListener, args=(log_queue,log_path))
-    listener.start()
-    
-    pool.map(downloadSampleStar, [(downloader_path, output_path, x, log_queue) for x in accs])
-    
-    log_queue.put_nowait(None)
-    pool.close()
-    pool.join()
-    listener.join()
+    pool = mp.Pool()   
+    pool.map(downloadSampleStar, [(downloader_path, output_path, x) for x in accs])
     
     
     
     
 if __name__ == '__main__':
     
-    downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
-    input_path = '/d/data/plasmo/additional_data/test_accs.txt'
-    output_path = '/d/data/plasmo/additional_data'
+#     downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
+#     input_path = '/d/data/plasmo/additional_data/test_accs.txt'
+#     output_path = '/d/data/plasmo/additional_data'
+
+    downloader_path = '/home/javi/workspace/enaBrowserTools/python3/enaDataGet'
+    input_path = '/home/javi/data/plasmo/test_accs.txt'
+    output_path = '/home/javi/data/plasmo'
+
+
 #     downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
 #     input_path = sys.argv[1]
 #     output_path = sys.argv[2]
