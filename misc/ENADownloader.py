@@ -38,6 +38,10 @@ def downloadSample(downloader_path, output_path, accs):
     process one sample, combining the various fastqs if necessary
     '''
     
+    print('downloading ' + str(accs))
+    accs = pandas.Series(accs)
+    accs = accs.loc[accs.notnull()]
+    
     def getPath(acc, n):
         '''gets the full path for an accession, for cat purposes.
         n means the first or second file'''
@@ -50,8 +54,7 @@ def downloadSample(downloader_path, output_path, accs):
         then we want to move the file back up
         '''
         return os.path.join(output_path, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
-    
-        
+      
 #     for acc in accs:
 #         sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
 #     
@@ -77,7 +80,7 @@ def checkForCompletion(log, acc):
     '''
     checks if this acc is in the log. Return true if not there.
     '''
-    if re.search(acc, log):
+    if re.search(acc[0], log):
         print(acc + ' already done!')
         return False
     return True
@@ -88,11 +91,13 @@ def loadTable(input_path):
     the accs is always an ndarray. 
     '''
     
-    
+    def accHelper(sec_accs):
+        arr = [getAcc(sec_acc.strip()) for sec_acc in sec_accs.split(',')]
+        np_arr = np.array(arr).flatten()      
+        return np_arr
+        
     df = pandas.read_csv(input_path, sep='\t')
-    
-    df['accs'] = df['accession'].apply(lambda x: np.array([getAcc(sec_acc.strip()) for sec_acc in x.split(',')]).flatten())
-    
+    df['accs'] = df['accession'].apply(accHelper)
     return df
 
 def configLogger(path):
@@ -141,7 +146,7 @@ def run(downloader_path, input_path, output_path):
     
     if not os.path.isfile(acc_path):
         acc_df = loadTable(input_path)['accs']
-        acc_df = acc_df.iloc[acc_df.notnull()]
+        acc_df = acc_df.loc[acc_df.notnull()]
         acc_df.to_pickle(acc_path)
     else:
         acc_df = pandas.read_pickle(acc_path)
@@ -169,7 +174,7 @@ if __name__ == '__main__':
 
 #     downloader_path = '/home/javi/workspace/enaBrowserTools/python3/enaDataGet'
 #     input_path = '/home/javi/data/plasmo/test_accs.txt'
-#     output_path = '/home/javi/data/plasmo'/
+#     output_path = '/home/javi/data/plasmo'
 
 
     downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
