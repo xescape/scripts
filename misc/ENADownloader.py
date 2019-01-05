@@ -24,10 +24,13 @@ def getAcc(sec_acc):
     res = requests.get(template.format(sec_acc)).content
     
     root = xml.fromstring(res)
-
-    for child in root.find('SAMPLE').find('SAMPLE_LINKS'):
-        if child.find('XREF_LINK').find('DB').text == 'ENA-RUN':
-            return child.find('XREF_LINK').find('ID').text.split(',')
+    
+    try:
+        for child in root.find('SAMPLE').find('SAMPLE_LINKS'):
+            if child.find('XREF_LINK').find('DB').text == 'ENA-RUN':
+                return child.find('XREF_LINK').find('ID').text.split(',')
+    except AttributeError:
+        return None
 
             
 def downloadSample(downloader_path, output_path, accs):
@@ -88,7 +91,7 @@ def loadTable(input_path):
     
     df = pandas.read_csv(input_path, sep='\t')
     
-    df['accs'] = df['accession'].apply(lambda x: np.array([getAcc(sec_acc) for sec_acc in x.split(',')]).flatten())
+    df['accs'] = df['accession'].apply(lambda x: np.array([getAcc(sec_acc.strip()) for sec_acc in x.split(',')]).flatten())
     
     return df
 
@@ -138,6 +141,7 @@ def run(downloader_path, input_path, output_path):
     
     if not os.path.isfile(acc_path):
         acc_df = loadTable(input_path)['accs']
+        acc_df = acc_df.iloc[acc_df.notnull()]
         acc_df.to_pickle(acc_path)
     else:
         acc_df = pandas.read_pickle(acc_path)
