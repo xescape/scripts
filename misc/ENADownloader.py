@@ -16,7 +16,11 @@ import logging
 import re
 from datetime import datetime as dt
 
+
 def getAcc(sec_acc):
+    '''
+    returns the run accession from the secondary accession. if there are multiple we return the last one. Probably the best one?
+    '''
     
     print('getting acc for ' + sec_acc)
     template = "https://www.ebi.ac.uk/ena/data/view/{0}&display=xml"
@@ -28,50 +32,39 @@ def getAcc(sec_acc):
     try:
         for child in root.find('SAMPLE').find('SAMPLE_LINKS'):
             if child.find('XREF_LINK').find('DB').text == 'ENA-RUN':
-                return child.find('XREF_LINK').find('ID').text.split(',')
+                return child.find('XREF_LINK').find('ID').text.strip().split(',')[-1] #we're going to return only the last accession. Hopefully this works. 
     except AttributeError:
         return None
 
             
-def downloadSample(downloader_path, output_path, accs):
+def downloadSample(downloader_path, output_path, acc):
     '''
-    process one sample, combining the various fastqs if necessary
+    process one sample. we're going to assume it's just one acc.
+    it's actually impractical to do more than 1.
     '''
     
-    print('downloading ' + str(accs))
-    accs = pandas.Series(accs)
-    accs = accs.loc[accs.notnull()]
+    print('downloading ' + str(acc))
     
     def getPath(acc, n):
         '''gets the full path for an accession, for cat purposes.
         n means the first or second file'''
-        
+         
         return os.path.join(output_path, acc, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
-    
+     
     def getFinalPath(acc, n):
         '''
         so it turns we had to have the downloader go one level deeper.
         then we want to move the file back up
         '''
         return os.path.join(output_path, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
-      
-#     for acc in accs:
-#         sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
-#     
-#     #merge and move files
-#     if len(accs) > 1:
-#         sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 1) for acc in accs]), getPath(accs[0], 1)))
-#         sub.run('cat {0} > {1}'.format(' '.join([getPath(acc, 2) for acc in accs]), getPath(accs[0], 2)))
-#         for acc in accs[1:]:
-#             os.remove(getPath(acc, 1))
-#             os.remove(getPath(acc, 2))
-#             os.rmdir(os.path.join(output_path, acc, acc))
-#     
-#     os.rename(getPath(accs[0], 1), getFinalPath(accs[0], 1))
-#     os.rename(getPath(accs[0], 2), getFinalPath(accs[0], 2))
-#     os.rmdir(os.path.join(output_path, accs[0], accs[0]))
+
+    sub.run([downloader_path, '-f', 'fastq', '-d', os.path.join(output_path, acc), acc])
+          
+    os.rename(getPath(acc, 1), getFinalPath(acc, 1))
+    os.rename(getPath(acc, 2), getFinalPath(acc, 2))
+    os.rmdir(os.path.join(output_path, acc, acc))
     
-    logging.info(accs[0]) #TODO
+    logging.info(acc) #TODO
 
 def downloadSampleStar(params):
     return downloadSample(*params)
@@ -80,7 +73,7 @@ def checkForCompletion(log, acc):
     '''
     checks if this acc is in the log. Return true if not there.
     '''
-    if re.search(acc[0], log):
+    if re.search(acc, log):
         print(acc + ' already done!')
         return False
     return True
@@ -93,11 +86,14 @@ def loadTable(input_path):
     
     def accHelper(sec_accs):
         arr = [getAcc(sec_acc.strip()) for sec_acc in sec_accs.split(',')]
-        np_arr = np.array(arr).flatten()      
-        return np_arr
+        return np.array(arr)
         
     df = pandas.read_csv(input_path, sep='\t')
     df['accs'] = df['accession'].apply(accHelper)
+    
+    #filter out rows where we have no run accs
+    df = df.loc[df['accs'].notnull()]
+    print(df)
     return df
 
 def configLogger(path):
@@ -112,30 +108,10 @@ def configLogger(path):
     logger.addHandler(fh)
     
     sh = logging.StreamHandler()
+    sh.setFormatter(formatter)
     sh.setLevel(logging.INFO)
     logger.addHandler(sh)
 
-
-# def logListener(queue, log_path):
-#     print('starting log listener')
-#     logger = getLogger(log_path)
-#     while True:
-#         try:
-#             record = queue.get()
-#             if record is None:
-#                 break
-#             print('logging ' + record)
-#             logger.handle(record)
-#         except Exception:
-#             import sys, traceback
-#             print('Whoops! Problem:', file=sys.stderr)
-#             traceback.print_exc(file=sys.stderr)
-#     
-#     print('exiting log listener')
-# 
-# def logListenerStar(params):
-#     print('Im log listener star')
-#     logListener(*params)
 
 def run(downloader_path, input_path, output_path):
     
@@ -145,20 +121,24 @@ def run(downloader_path, input_path, output_path):
     configLogger(log_path)
     
     if not os.path.isfile(acc_path):
-        acc_df = loadTable(input_path)['accs']
-        acc_df = acc_df.loc[acc_df.notnull()]
+        #if this is not a restart, read tsv and make it a hdf
+        acc_df = loadTable(input_path)       
         acc_df.to_pickle(acc_path)
     else:
         acc_df = pandas.read_pickle(acc_path)
     
-    #get accs of the ones we need to run.
+    print(acc_df)
+    #get accs of the ones we need to run, then flatten
+    accs = acc_df['accs']
+    accs = pandas.Series([item for sublist in list(accs) for item in sublist])
+    
+    #from here on accs should be a flat series
     if os.path.isfile(log_path):
         with open(log_path, 'r') as f:
             log = f.read()
-        msk = list(acc_df.apply(lambda x: checkForCompletion(log, x[0])))
-        accs = acc_df.iloc[msk]
-    else:
-        accs = acc_df
+       
+        msk = accs.apply(lambda x: checkForCompletion(log, x))
+        accs = accs.iloc[list(msk)]
     
     pool = mp.Pool()   
     pool.map(downloadSampleStar, [(downloader_path, output_path, x) for x in accs])
@@ -168,18 +148,18 @@ def run(downloader_path, input_path, output_path):
     
 if __name__ == '__main__':
     
-#     downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
-#     input_path = '/d/data/plasmo/additional_data/test_accs.txt'
-#     output_path = '/d/data/plasmo/additional_data'
+    downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
+    input_path = '/d/data/plasmo/additional_data/test_accs.txt'
+    output_path = '/d/data/plasmo/additional_data'
 
 #     downloader_path = '/home/javi/workspace/enaBrowserTools/python3/enaDataGet'
 #     input_path = '/home/javi/data/plasmo/test_accs.txt'
 #     output_path = '/home/javi/data/plasmo'
 
 
-    downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
+#     downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
+#     input_path = sys.argv[1]
+#     output_path = sys.argv[2]
     
     run(downloader_path, input_path, output_path)
     print('ENADownloader Complete.')
