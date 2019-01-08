@@ -93,7 +93,6 @@ def loadTable(input_path):
     
     #filter out rows where we have no run accs
     df = df.loc[df['accs'].notnull()]
-    print(df)
     return df
 
 def configLogger(path):
@@ -130,7 +129,7 @@ def run(downloader_path, input_path, output_path):
     print(acc_df)
     #get accs of the ones we need to run, then flatten
     accs = acc_df['accs']
-    accs = pandas.Series([item for sublist in list(accs) for item in sublist])
+    accs = pandas.Series([item for sublist in list(accs) for item in sublist if item != None])
     
     #from here on accs should be a flat series
     if os.path.isfile(log_path):
