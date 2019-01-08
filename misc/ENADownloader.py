@@ -148,18 +148,18 @@ def run(downloader_path, input_path, output_path):
     
 if __name__ == '__main__':
     
-    downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
-    input_path = '/d/data/plasmo/additional_data/test_accs.txt'
-    output_path = '/d/data/plasmo/additional_data'
+#     downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
+#     input_path = '/d/data/plasmo/additional_data/test_accs.txt'
+#     output_path = '/d/data/plasmo/additional_data'
 
 #     downloader_path = '/home/javi/workspace/enaBrowserTools/python3/enaDataGet'
 #     input_path = '/home/javi/data/plasmo/test_accs.txt'
 #     output_path = '/home/javi/data/plasmo'
 
 
-#     downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
-#     input_path = sys.argv[1]
-#     output_path = sys.argv[2]
+    downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
+    input_path = sys.argv[1]
+    output_path = sys.argv[2]
     
     run(downloader_path, input_path, output_path)
     print('ENADownloader Complete.')
