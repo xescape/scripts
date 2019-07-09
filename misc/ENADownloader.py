@@ -53,7 +53,7 @@ def downloadSample(downloader_path, output_path, acc):
      
     def getFinalPath(acc, n):
         '''
-        so it turns we had to have the downloader go one level deeper.
+        so it turns out we had to have the downloader go one level deeper.
         then we want to move the file back up
         '''
         return os.path.join(output_path, acc, "{0}_{1}.fastq.gz".format(acc, str(n)))
@@ -126,7 +126,7 @@ def run(downloader_path, input_path, output_path):
     else:
         acc_df = pandas.read_pickle(acc_path)
     
-    print(acc_df)
+    # print(acc_df)
     #get accs of the ones we need to run, then flatten
     accs = acc_df['accs']
     accs = pandas.Series([item for sublist in list(accs) for item in sublist if item != None])
@@ -151,14 +151,14 @@ if __name__ == '__main__':
 #     input_path = '/d/data/plasmo/additional_data/test_accs.txt'
 #     output_path = '/d/data/plasmo/additional_data'
 
-#     downloader_path = '/home/javi/workspace/enaBrowserTools/python3/enaDataGet'
-#     input_path = '/home/javi/data/plasmo/test_accs.txt'
-#     output_path = '/home/javi/data/plasmo'
+    downloader_path = '/d/data/plasmo/enaBrowserTools/python3/enaDataGet'
+    input_path = '/d/data/plasmo/new_accs.txt'
+    output_path = '/home/javi/seq'
 
 
-    downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
-    input_path = sys.argv[1]
-    output_path = sys.argv[2]
+    # downloader_path = '/home/j/jparkin/xescape/programs/enaBrowserTools/python3/enaDataGet'
+    # input_path = sys.argv[1]
+    # output_path = sys.argv[2]
     
     run(downloader_path, input_path, output_path)
     print('ENADownloader Complete.')
